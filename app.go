@@ -8,14 +8,14 @@ import (
 )
 
 const (
-	defaultWorkspaceRoot    = `C:\Users\yohoo\Desktop\代码`
-	defaultPipelinePython   = `C:\Users\yohoo\Desktop\代码\sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30\.venv\Scripts\python.exe`
+	defaultWorkspaceRoot    = ""
+	defaultPipelinePython   = ""
 	defaultPythonExe        = `D:\models\python310\python.exe`
 	defaultHFHome           = `D:\models\huggingface`
-	defaultXTTSSite         = `C:\Users\yohoo\Desktop\代码\xtts_site`
-	defaultXTTSSrc          = `C:\Users\yohoo\Desktop\代码\xtts_src\TTS-0.22.0`
-	defaultExtraSitePackage = `C:\Users\yohoo\Desktop\代码\sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30\.venv\Lib\site-packages`
-	defaultJobRoot          = `D:\Desktop\audio_english_jobs`
+	defaultXTTSSite         = ""
+	defaultXTTSSrc          = ""
+	defaultExtraSitePackage = ""
+	defaultJobRoot          = `D:\audio_english_jobs`
 	defaultOutputBaseName   = "english_dialogue_xttsv2_podcast_app"
 	eventJobUpdate          = "job:update"
 	maxLogLines             = 400

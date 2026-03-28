@@ -4,3 +4,4 @@ node_modules
 frontend/dist
 python/__pycache__
 *.pyc
+audio-english-desktop.exe

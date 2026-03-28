@@ -34,5 +34,4 @@ require (
 	golang.org/x/text v0.22.0 // indirect
 )
 
-// replace github.com/wailsapp/wails/v2 v2.11.0 => C:\Users\yohoo\go\pkg\mod
 replace github.com/stretchr/testify => github.com/stretchr/testify v1.11.1
