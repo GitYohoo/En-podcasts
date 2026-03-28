@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { EventsOff, EventsOn } from "../wailsjs/runtime/runtime";
+import { main as WailsModels } from "../wailsjs/go/models";
 import {
   CancelCurrentJob,
   ClearReferenceAudio,
@@ -253,6 +254,9 @@ function App() {
   const [chinesePreview, setChinesePreview] = useState("");
   const [englishPreview, setEnglishPreview] = useState("");
   const [busy, setBusy] = useState(false);
+  const logConsoleRef = useRef<HTMLDivElement | null>(null);
+  const stickLogToBottomRef = useRef(true);
+  const previousLogCountRef = useRef(0);
 
   useEffect(() => {
     GetState().then((next) => setState(next as JobState));
@@ -292,6 +296,21 @@ function App() {
     ReadTextFile(target).then(setEnglishPreview).catch(() => setEnglishPreview(""));
   }, [state.files.englishTxt, state.englishTranscriptPath]);
 
+  useEffect(() => {
+    const consoleElement = logConsoleRef.current;
+    const logCount = state.logs?.length || 0;
+    if (!consoleElement) {
+      previousLogCountRef.current = logCount;
+      return;
+    }
+
+    const logsReset = logCount < previousLogCountRef.current;
+    if (stickLogToBottomRef.current || logsReset) {
+      consoleElement.scrollTop = consoleElement.scrollHeight;
+    }
+    previousLogCountRef.current = logCount;
+  }, [state.logs]);
+
   const progressValue = Math.max(0, Math.min(100, Math.round((state.progress || 0) * 100)));
   const statusLabel = STATUS_LABELS[state.status] || state.status || "待命";
   const canProcess = Boolean(state.audioPath) && !state.running && !busy;
@@ -318,6 +337,24 @@ function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleLogScroll() {
+    const consoleElement = logConsoleRef.current;
+    if (!consoleElement) {
+      return;
+    }
+    const distanceToBottom =
+      consoleElement.scrollHeight - consoleElement.scrollTop - consoleElement.clientHeight;
+    stickLogToBottomRef.current = distanceToBottom <= 24;
+  }
+
+  function toWailsReviewTurns(turns: ReviewTurn[]): WailsModels.ReviewTurn[] {
+    return turns.map((turn) => WailsModels.ReviewTurn.createFrom(turn));
+  }
+
+  function toWailsSynthesisOptions(options: SynthesisOptions): WailsModels.SynthesisOptions {
+    return WailsModels.SynthesisOptions.createFrom(options);
   }
 
   return (
@@ -381,7 +418,7 @@ function App() {
               )) : <div className="empty-box">先完成步骤 1，校对稿会显示在这里。</div>}
             </div>
             <div className="action-row">
-              <button className="button primary" disabled={!canTranslate} onClick={() => runAction(async () => { await StartTranslation(reviewTurns); })}>生成英文稿</button>
+              <button className="button primary" disabled={!canTranslate} onClick={() => runAction(async () => { await StartTranslation(toWailsReviewTurns(reviewTurns)); })}>生成英文稿</button>
               <button className="button ghost" disabled={!state.files.reviewTxt} onClick={() => OpenPath(state.files.reviewTxt)}>打开校对文本</button>
               <button className="button ghost" disabled={!state.files.resultManifest} onClick={() => OpenPath(state.files.resultManifest)}>打开英文稿清单</button>
             </div>
@@ -416,7 +453,7 @@ function App() {
               <Toggle checked={form.coquiTOSAgreed} onChange={(value) => updateField("coquiTOSAgreed", value)} label="我已同意 XTTS 的 CPML 条款" />
             </div>
             <div className="action-row">
-              <button className="button primary" disabled={!canSynthesize} onClick={() => runAction(async () => { await StartSynthesis(form); })}>生成英文音频</button>
+              <button className="button primary" disabled={!canSynthesize} onClick={() => runAction(async () => { await StartSynthesis(toWailsSynthesisOptions(form)); })}>生成英文音频</button>
               <button className="button warning" disabled={!state.running || busy} onClick={() => runAction(async () => { await CancelCurrentJob(); })}>取消任务</button>
               <button className="button ghost" disabled={!state.outputAudioPath} onClick={() => OpenPath(state.outputAudioPath)}>打开音频</button>
             </div>
@@ -442,7 +479,7 @@ function App() {
           </Panel>
 
           <Panel eyebrow="日志" title="运行日志">
-            <div className="log-console">
+            <div className="log-console" ref={logConsoleRef} onScroll={handleLogScroll}>
               {state.logs?.length ? state.logs.map((line, index) => <div className="log-line" key={`${index}-${line}`}>{line}</div>) : <div className="empty-box small">Python 输出和进度会显示在这里。</div>}
             </div>
           </Panel>
@@ -459,6 +496,17 @@ function App() {
           {state.error ? <div className="error-banner">{state.error}</div> : null}
         </aside>
       </section>
+
+      <div className="floating-progress">
+        <div className="floating-progress-head">
+          <span className={`status-pill status-${state.status || "idle"}`}>{statusLabel}</span>
+          <span className="floating-progress-percent">{progressValue}%</span>
+        </div>
+        <div className="floating-progress-text">{state.message}</div>
+        <div className="progress-bar floating-progress-bar">
+          <div className={`progress-fill progress-${state.status || "idle"}`} style={{ width: `${progressValue}%` }} />
+        </div>
+      </div>
     </div>
   );
 }

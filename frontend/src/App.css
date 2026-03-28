@@ -465,6 +465,47 @@
   border: 1px solid rgba(211, 94, 67, 0.28);
 }
 
+.floating-progress {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 40;
+  width: min(420px, calc(100vw - 32px));
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(244, 239, 230, 0.1);
+  background:
+    linear-gradient(135deg, rgba(255, 166, 98, 0.12), rgba(72, 177, 171, 0.1)),
+    rgba(12, 14, 17, 0.92);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(12px);
+}
+
+.floating-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.floating-progress-percent {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  color: #f4efe6;
+}
+
+.floating-progress-text {
+  margin-bottom: 12px;
+  color: rgba(244, 239, 230, 0.8);
+  line-height: 1.6;
+}
+
+.floating-progress-bar {
+  height: 10px;
+}
+
 @media (max-width: 1240px) {
   .layout,
   .hero-card {
@@ -475,6 +516,13 @@
 @media (max-width: 920px) {
   .app-shell {
     padding: 16px;
+  }
+
+  .floating-progress {
+    right: 16px;
+    left: 16px;
+    bottom: 16px;
+    width: auto;
   }
 
   .hero-card,

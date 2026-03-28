@@ -203,6 +203,11 @@ def choose_whisper_settings() -> tuple[str, str]:
     return "cpu", "int8"
 
 
+def should_enable_word_timestamps() -> bool:
+    value = os.environ.get("AUDIO_PIPELINE_ENABLE_WORD_TIMESTAMPS", "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
 def resolve_local_model_path(model_id: str, hf_home: Path) -> Path:
     repo_dir_name = "models--" + model_id.replace("/", "--")
     candidates = [
@@ -308,6 +313,9 @@ def transcribe_audio(audio: np.ndarray, model_id: str, hf_home: Path) -> tuple[l
         device=device,
         compute_type=compute_type,
     )
+    word_timestamps_enabled = should_enable_word_timestamps()
+    if not word_timestamps_enabled:
+        log("中文转写已切换为片段级时间戳模式，以避免 faster-whisper 在 Windows 上的字级时间戳崩溃。")
 
     segment_iterator, _ = model.transcribe(
         audio,
@@ -316,7 +324,7 @@ def transcribe_audio(audio: np.ndarray, model_id: str, hf_home: Path) -> tuple[l
         beam_size=5,
         vad_filter=True,
         condition_on_previous_text=True,
-        word_timestamps=True,
+        word_timestamps=word_timestamps_enabled,
     )
 
     words: list[dict[str, Any]] = []
