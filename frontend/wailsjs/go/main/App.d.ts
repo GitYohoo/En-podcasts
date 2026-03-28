@@ -1,0 +1,11 @@
+export function CancelCurrentJob(): Promise<any>;
+export function ClearReferenceAudio(): Promise<any>;
+export function GetState(): Promise<any>;
+export function OpenPath(arg1: string): Promise<void>;
+export function ReadTextFile(arg1: string): Promise<string>;
+export function SelectAudio(): Promise<string>;
+export function SelectOutputDir(): Promise<string>;
+export function SelectReferenceAudio(): Promise<string>;
+export function StartProcessing(): Promise<any>;
+export function StartSynthesis(arg1: any): Promise<any>;
+export function StartTranslation(arg1: any): Promise<any>;

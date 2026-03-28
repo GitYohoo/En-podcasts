@@ -1,0 +1,6 @@
+build/bin
+build/gocache
+node_modules
+frontend/dist
+python/__pycache__
+*.pyc
