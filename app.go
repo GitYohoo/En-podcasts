@@ -10,11 +10,11 @@ import (
 const (
 	defaultWorkspaceRoot    = ""
 	defaultPipelinePython   = ""
-	defaultPythonExe        = `D:\models\python310\python.exe`
+	defaultPythonExe        = `D:\models\audio-english-runtime\Scripts\python.exe`
 	defaultHFHome           = `D:\models\huggingface`
 	defaultXTTSSite         = ""
 	defaultXTTSSrc          = ""
-	defaultExtraSitePackage = ""
+	defaultExtraSitePackage = `D:\models\audio-english-runtime\Lib\site-packages`
 	defaultJobRoot          = `D:\audio_english_jobs`
 	defaultOutputBaseName   = "english_dialogue_xttsv2_podcast_app"
 	eventJobUpdate          = "job:update"

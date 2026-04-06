@@ -17,6 +17,7 @@
 
 - 中文稿 AI 校对
   对转写结果进行语义级修正，输出更通顺、上下文一致的中文稿，并标注疑点。
+  当前默认本地校对模型为 `Qwen/Qwen3.5-9B`。
 
 - 英文稿生成
   基于校对后的中文稿生成自然口语化英文文本，并导出字幕文件。
@@ -42,6 +43,10 @@
 - 说话人分离：pyannote.audio
 - 翻译与文本优化：Transformers 本地模型
 - 语音合成：Coqui XTTS v2
+
+补充说明：
+- AI 校对默认使用 `Qwen/Qwen3.5-9B`
+- 运行该模型前，建议准备支持 Qwen3.5 的较新 `transformers` 版本以及对应本地模型缓存
 
 ## 项目结构
 
@@ -128,6 +133,12 @@ audio-english-desktop/
 
 应用使用统一 Python 运行时，依赖通过 `PYTHONPATH` 注入，而不是按阶段切换不同 Python。
 
+默认推荐路径：
+
+- Python 运行时：`D:\models\audio-english-runtime\Scripts\python.exe`
+- Hugging Face 缓存：`D:\models\huggingface`
+- 额外 `site-packages`：`D:\models\audio-english-runtime\Lib\site-packages`
+
 ## 可用环境变量
 
 如果你的本地路径不同，可以通过环境变量覆盖默认配置：
@@ -169,6 +180,7 @@ audio-english-desktop/
 - `xtts_site`、`xtts_src`、额外 `site-packages` 路径可用
 
 如果 Python 中缺少 `numpy`、`soundfile`、`TTS`、`faster_whisper`、`pyannote.audio` 等依赖，流程会直接失败。
+如果使用 `Qwen/Qwen3.5-9B` 作为 AI 校对模型，建议同时准备较新的 `transformers`，并优先启用 4bit 量化以适配 12GB 显存。
 
 ## 开发运行
 
@@ -338,4 +350,3 @@ wails build -skipbindings -s
 - 临时任务输出建议放在单独任务目录下
 - 当前代码主要针对 Windows 环境验证
 - 本项目依赖较重，不建议随意更换 Python 版本和目录结构
-

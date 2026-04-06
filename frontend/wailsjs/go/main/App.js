@@ -18,12 +18,24 @@ export function GetState() {
   return window['go']['main']['App']['GetState']();
 }
 
+export function ImportChineseTextFile() {
+  return window['go']['main']['App']['ImportChineseTextFile']();
+}
+
+export function ImportEnglishTranscriptFile() {
+  return window['go']['main']['App']['ImportEnglishTranscriptFile']();
+}
+
 export function OpenPath(arg1) {
   return window['go']['main']['App']['OpenPath'](arg1);
 }
 
 export function ReadTextFile(arg1) {
   return window['go']['main']['App']['ReadTextFile'](arg1);
+}
+
+export function SaveReviewDraft(arg1) {
+  return window['go']['main']['App']['SaveReviewDraft'](arg1);
 }
 
 export function SelectAudio() {
@@ -40,6 +52,10 @@ export function SelectReferenceAudio() {
 
 export function StartProcessing() {
   return window['go']['main']['App']['StartProcessing']();
+}
+
+export function StartProofread(arg1) {
+  return window['go']['main']['App']['StartProofread'](arg1);
 }
 
 export function StartSynthesis(arg1) {

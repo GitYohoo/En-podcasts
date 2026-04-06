@@ -6,15 +6,14 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: "127.0.0.1",
-    port: 5173,
+    port: 5174,
     strictPort: true,
   },
   resolve: {
     preserveSymlinks: true,
   },
   optimizeDeps: {
-    noDiscovery: true,
-    include: [],
+    include: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime"],
   },
   build: {
     outDir: "dist",

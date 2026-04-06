@@ -1,5 +1,6 @@
 import argparse
 import gc
+import importlib.util
 import json
 import math
 import os
@@ -23,6 +24,7 @@ from transformers import (
     AutoModelForCausalLM,
     AutoModelForSeq2SeqLM,
     AutoTokenizer,
+    BitsAndBytesConfig,
 )
 
 
@@ -40,11 +42,12 @@ DEFAULT_HF_HOME = Path(r"D:\models\huggingface")
 DEFAULT_OUTPUT_ROOT = Path(r"D:\Desktop\audio_english_jobs")
 DEFAULT_DRAFT_MODEL = "Helsinki-NLP/opus-mt-zh-en"
 DEFAULT_REFINE_MODEL = "Qwen/Qwen2.5-3B-Instruct"
-DEFAULT_REVIEW_MODEL = "Qwen/Qwen2.5-3B-Instruct"
+DEFAULT_REVIEW_MODEL = "Qwen/Qwen3.5-9B"
 DEFAULT_WHISPER_MODEL = "large-v3"
 DEFAULT_PYANNOTE_MODEL = "pyannote/speaker-diarization-community-1"
 SAMPLE_RATE = 16000
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", flags=re.IGNORECASE | re.DOTALL)
 BLACKLIST_PHRASES = (
     "thanks for watching",
     "thank you for watching",
@@ -62,7 +65,7 @@ Rules:
 - If the draft is literal or awkward, rewrite it naturally.
 - Return English only.
 """
-REVIEW_SYSTEM_PROMPT = """你是资深中文口播转写校对编辑，擅长把 ASR 转写修成自然、通顺、符合上下文的中文。
+REVIEW_SYSTEM_PROMPT = """你擅长把 ASR 转写修成自然、通顺、符合上下文的中文。
 你的任务不是机械挑错字，而是结合全文中心主旨、事件线和邻近语境，对当前分段做语义级校对。
 
 校对原则：
@@ -182,14 +185,76 @@ def contains_cjk(text: str) -> bool:
     return bool(CJK_RE.search(text))
 
 
-def cleanup_english(text: str) -> str:
+def strip_thinking_content(text: str) -> str:
     cleaned = text.strip()
+    cleaned = THINK_BLOCK_RE.sub("", cleaned)
+    if "</think>" in cleaned.lower():
+        lowered = cleaned.lower()
+        closing = lowered.rfind("</think>")
+        cleaned = cleaned[closing + len("</think>") :]
+    return cleaned.strip()
+
+
+def cleanup_english(text: str) -> str:
+    cleaned = strip_thinking_content(text)
     cleaned = re.sub(r"^```(?:text)?\s*", "", cleaned)
     cleaned = re.sub(r"\s*```$", "", cleaned)
     cleaned = re.sub(r"^(Translation|English|Subtitle)\s*:\s*", "", cleaned, flags=re.IGNORECASE)
     cleaned = cleaned.replace("–", "-")
     cleaned = normalize_space(cleaned)
     return cleaned.strip("\"' ")
+
+
+def apply_chat_template_with_optional_non_thinking(tokenizer: AutoTokenizer, messages: list[dict[str, str]]) -> str:
+    try:
+        return tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
+        )
+    except TypeError:
+        return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+
+
+def env_flag(name: str) -> bool | None:
+    value = os.environ.get(name, "").strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    return None
+
+
+def has_module(module_name: str) -> bool:
+    return importlib.util.find_spec(module_name) is not None
+
+
+def should_use_4bit_quantization(model_id: str) -> bool:
+    override = env_flag("AUDIO_ENGLISH_LLM_4BIT")
+    if override is not None:
+        return override and torch.cuda.is_available() and has_module("bitsandbytes")
+    return torch.cuda.is_available() and "Qwen3.5-" in model_id and has_module("bitsandbytes")
+
+
+def build_causal_lm_load_kwargs(model_id: str, device: str) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {
+        "trust_remote_code": True,
+        "local_files_only": True,
+        "torch_dtype": "auto",
+    }
+    if device == "cuda":
+        kwargs["device_map"] = "auto"
+    if should_use_4bit_quantization(model_id):
+        compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=compute_dtype,
+        )
+        kwargs["torch_dtype"] = compute_dtype
+    return kwargs
 
 
 def has_blacklisted_phrase(text: str) -> bool:
@@ -482,13 +547,7 @@ class RefineTranslator:
             trust_remote_code=True,
             local_files_only=True,
         )
-        kwargs: dict[str, Any] = {
-            "trust_remote_code": True,
-            "local_files_only": True,
-            "torch_dtype": "auto",
-        }
-        if self.device == "cuda":
-            kwargs["device_map"] = "auto"
+        kwargs = build_causal_lm_load_kwargs(model_id, self.device)
         self.model = AutoModelForCausalLM.from_pretrained(str(model_path), **kwargs)
         self.model.eval()
         self.model.generation_config.do_sample = False
@@ -511,7 +570,7 @@ class RefineTranslator:
                 ),
             },
         ]
-        prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        prompt = apply_chat_template_with_optional_non_thinking(self.tokenizer, messages)
         inputs = self.tokenizer([prompt], return_tensors="pt")
         if self.device == "cuda":
             inputs = {key: value.to("cuda") for key, value in inputs.items()}
@@ -538,13 +597,7 @@ class TranscriptReviewer:
             trust_remote_code=True,
             local_files_only=True,
         )
-        kwargs: dict[str, Any] = {
-            "trust_remote_code": True,
-            "local_files_only": True,
-            "torch_dtype": "auto",
-        }
-        if self.device == "cuda":
-            kwargs["device_map"] = "auto"
+        kwargs = build_causal_lm_load_kwargs(model_id, self.device)
         self.model = AutoModelForCausalLM.from_pretrained(str(model_path), **kwargs)
         self.model.eval()
         self.model.generation_config.do_sample = False
@@ -565,7 +618,7 @@ class TranscriptReviewer:
                 ),
             },
         ]
-        prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        prompt = apply_chat_template_with_optional_non_thinking(self.tokenizer, messages)
         inputs = self.tokenizer([prompt], return_tensors="pt")
         if self.device == "cuda":
             inputs = {key: value.to("cuda") for key, value in inputs.items()}
@@ -579,7 +632,7 @@ class TranscriptReviewer:
             )
 
         generated = output[0, inputs["input_ids"].shape[1] :]
-        decoded = self.tokenizer.decode(generated, skip_special_tokens=True)
+        decoded = strip_thinking_content(self.tokenizer.decode(generated, skip_special_tokens=True))
         parsed = extract_json_object(decoded) or {}
         summary = normalize_space(str(parsed.get("summary") or ""))
         main_topic = normalize_space(str(parsed.get("main_topic") or parsed.get("topic") or ""))
@@ -646,7 +699,7 @@ class TranscriptReviewer:
                 ),
             },
         ]
-        prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        prompt = apply_chat_template_with_optional_non_thinking(self.tokenizer, messages)
         inputs = self.tokenizer([prompt], return_tensors="pt")
         if self.device == "cuda":
             inputs = {key: value.to("cuda") for key, value in inputs.items()}
@@ -660,7 +713,7 @@ class TranscriptReviewer:
             )
 
         generated = output[0, inputs["input_ids"].shape[1] :]
-        decoded = self.tokenizer.decode(generated, skip_special_tokens=True)
+        decoded = strip_thinking_content(self.tokenizer.decode(generated, skip_special_tokens=True))
         parsed = extract_json_object(decoded) or {}
         candidate_text = str(parsed.get("reviewed_text") or source_text)
         reviewed_text = normalize_review_text(candidate_text, source_text)
@@ -748,7 +801,7 @@ def build_segment_review_context(
 
 
 def extract_json_object(text: str) -> dict[str, Any] | None:
-    cleaned = text.strip()
+    cleaned = strip_thinking_content(text)
     cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s*```$", "", cleaned)
 
@@ -1070,6 +1123,58 @@ def build_review_turns(
     return reviewed_turns, review_context.summary
 
 
+def build_review_turns_from_existing(
+    review_turns: list[dict[str, Any]],
+    reviewer: TranscriptReviewer,
+) -> tuple[list[dict[str, Any]], str]:
+    turns = [
+        {
+            "turn_index": turn["turn_index"],
+            "speaker": turn["speaker"],
+            "start": turn["start"],
+            "end": turn["end"],
+            "start_ts": turn["start_ts"],
+            "end_ts": turn["end_ts"],
+            "zh_text": normalize_review_text(turn["reviewed_text"], turn["original_text"]) or turn["original_text"],
+            "original_text": turn["original_text"],
+        }
+        for turn in review_turns
+    ]
+
+    reviewed_turns: list[dict[str, Any]] = []
+    total_turns = len(turns)
+    emit_progress(0.30, "正在理解当前中文稿")
+    review_context = reviewer.summarize_context(turns)
+    emit_progress(0.38, f"正在基于当前中文稿执行 AI 校对，共 {total_turns} 段")
+
+    for index, turn in enumerate(turns, start=1):
+        segment_context = build_segment_review_context(turns, reviewed_turns, index - 1)
+        reviewed_text, issues = reviewer.review(
+            turn["zh_text"],
+            turn["speaker"],
+            turn["start_ts"],
+            turn["end_ts"],
+            review_context.brief,
+            segment_context,
+        )
+        reviewed_turns.append(
+            {
+                "turn_index": turn["turn_index"],
+                "speaker": turn["speaker"],
+                "start": turn["start"],
+                "end": turn["end"],
+                "start_ts": turn["start_ts"],
+                "end_ts": turn["end_ts"],
+                "original_text": turn["original_text"],
+                "reviewed_text": reviewed_text,
+                "issues": issues,
+            }
+        )
+        emit_progress(0.38 + 0.52 * (index / max(1, total_turns)), f"正在校对第 {index}/{total_turns} 段")
+
+    return reviewed_turns, review_context.summary
+
+
 def original_turns_from_review(review_turns: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
@@ -1222,7 +1327,7 @@ def resolve_input_audio(output_dir: Path, review_json: Path) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="中文音频转英文稿的本地离线处理流程。")
-    parser.add_argument("--mode", choices=["review", "translate"], default="review")
+    parser.add_argument("--mode", choices=["review", "proofread", "translate"], default="review")
     parser.add_argument("--input", type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--review-json", type=Path)
@@ -1237,7 +1342,7 @@ def parse_args() -> argparse.Namespace:
 
     if args.mode == "review" and args.input is None:
         parser.error("--input 在 review 模式下必填")
-    if args.mode == "translate" and args.review_json is None:
+    if args.mode in {"proofread", "translate"} and args.review_json is None:
         parser.error("--review-json 在 translate 模式下必填")
     return args
 
@@ -1358,10 +1463,41 @@ def run_translate_mode(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_proofread_mode(args: argparse.Namespace) -> int:
+    hf_home = Path(args.hf_home)
+    configure_environment(hf_home)
+
+    output_dir = args.output_dir.resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    review_json = args.review_json.resolve()
+    review_turns = load_review_turns(review_json)
+    if not review_turns:
+        raise RuntimeError("没有可用于 AI 校对的中文稿。")
+
+    input_audio = resolve_input_audio(output_dir, review_json)
+    emit_progress(0.12, "正在读取当前中文稿")
+
+    emit_progress(0.20, "正在加载 AI 校对模型")
+    reviewer = TranscriptReviewer(args.review_model, hf_home)
+    proofread_turns, review_summary = build_review_turns_from_existing(review_turns, reviewer)
+
+    del reviewer
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    emit_progress(0.94, "正在写出 AI 校对结果")
+    manifest = write_review_outputs(output_dir, input_audio, proofread_turns, review_summary)
+    print(f"REVIEW_MANIFEST={manifest['manifest']}", flush=True)
+    return 0
+
+
 def main() -> int:
     args = parse_args()
     if args.mode == "review":
         return run_review_mode(args)
+    if args.mode == "proofread":
+        return run_proofread_mode(args)
     if args.mode == "translate":
         return run_translate_mode(args)
     raise RuntimeError(f"不支持的模式: {args.mode}")

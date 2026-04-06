@@ -10,9 +10,15 @@ export function ClearReferenceAudio():Promise<main.JobState>;
 
 export function GetState():Promise<main.JobState>;
 
+export function ImportChineseTextFile():Promise<main.JobState>;
+
+export function ImportEnglishTranscriptFile():Promise<main.JobState>;
+
 export function OpenPath(arg1:string):Promise<void>;
 
 export function ReadTextFile(arg1:string):Promise<string>;
+
+export function SaveReviewDraft(arg1:Array<main.ReviewTurn>):Promise<main.JobState>;
 
 export function SelectAudio():Promise<string>;
 
@@ -21,6 +27,8 @@ export function SelectOutputDir():Promise<string>;
 export function SelectReferenceAudio():Promise<string>;
 
 export function StartProcessing():Promise<main.JobState>;
+
+export function StartProofread(arg1:Array<main.ReviewTurn>):Promise<main.JobState>;
 
 export function StartSynthesis(arg1:main.SynthesisOptions):Promise<main.JobState>;
 

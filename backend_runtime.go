@@ -125,6 +125,18 @@ func buildTranslationCommand(runtimeInfo RuntimeInfo, scriptPath string, reviewJ
 	return newBackgroundCommand(runtimeInfo.PythonExe, args...), commandPreview
 }
 
+func buildProofreadCommand(runtimeInfo RuntimeInfo, scriptPath string, reviewJSON string, outputDir string) (*exec.Cmd, string) {
+	args := []string{
+		scriptPath,
+		"--mode", "proofread",
+		"--review-json", reviewJSON,
+		"--output-dir", outputDir,
+		"--hf-home", runtimeInfo.HFHome,
+	}
+	commandPreview := quoteWindowsCommand(append([]string{runtimeInfo.PythonExe}, args...))
+	return newBackgroundCommand(runtimeInfo.PythonExe, args...), commandPreview
+}
+
 func buildSynthesisCommand(runtimeInfo RuntimeInfo, scriptPath string, options SynthesisOptions, outputAudioPath string, manifestPath string) (*exec.Cmd, string) {
 	args := []string{
 		scriptPath,
