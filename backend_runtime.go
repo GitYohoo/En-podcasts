@@ -502,6 +502,29 @@ func candidateRoots() []string {
 			current = parent
 		}
 	}
+
+	for _, root := range append([]string(nil), roots...) {
+		parent := filepath.Dir(root)
+		if parent == "" || parent == root {
+			continue
+		}
+		entries, err := os.ReadDir(parent)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			sibling := filepath.Join(parent, entry.Name())
+			sibling = filepath.Clean(sibling)
+			if seen[sibling] {
+				continue
+			}
+			seen[sibling] = true
+			roots = append(roots, sibling)
+		}
+	}
 	return roots
 }
 

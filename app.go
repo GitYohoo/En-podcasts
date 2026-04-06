@@ -51,5 +51,10 @@ func (a *App) startup(ctx context.Context) {
 		a.state.Runtime = runtimeInfo
 		a.mu.Unlock()
 		a.emitState()
+	} else {
+		a.mu.Lock()
+		a.appendLogLocked("环境检测失败: " + err.Error())
+		a.mu.Unlock()
+		a.emitState()
 	}
 }
